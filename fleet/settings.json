@@ -1,0 +1,76 @@
+{
+  "cleanupPeriodDays": 36500,
+  "model": "opus",
+  "permissions": {
+    "deny": [
+      "NotebookEdit",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "RemoteTrigger",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "DesignSync",
+      "PushNotification",
+      "ReportFindings",
+      "AskUserQuestion"
+    ]
+  },
+  "disableClaudeAiConnectors": true,
+  "disableBundledSkills": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.shyrosa/scripts/check-writing-for-agents.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.shyrosa/scripts/check-handoff-write.py"
+          }
+        ]
+      }
+    ]
+  },
+  "disableRemoteControl": true,
+  "disableArtifact": true,
+  "enableWorkflows": true,
+  "statusLine": {
+    "type": "command",
+    "command": "python3 ~/.claude/statusline-context.py",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "cc-plugin-you-should-know@builtin": false
+  },
+  "outputStyle": "Unslop",
+  "effortLevel": "xhigh",
+  "modelSettings": {
+    "claude-opus-5": {
+      "effortLevel": "xhigh"
+    },
+    "claude-opus-5-5": {
+      "effortLevel": "medium"
+    }
+  },
+  "tui": "fullscreen",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
+  "theme": "dark",
+  "autoCompactEnabled": false,
+  "idleCompaction": false,
+  "agentPushNotifEnabled": true,
+  "voiceEnabled": true,
+  "autoMemoryEnabled": false,
+  "env": {
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"
+  },
+  "feedbackDrafts": "off"
+}

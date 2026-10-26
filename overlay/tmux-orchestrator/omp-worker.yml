@@ -1,0 +1,51 @@
+# Worker-pane config overlay for omp (oh-my-pi).
+#
+# Launch a worker with:
+#   omp --config .../omp-worker.yml --append-system-prompt .../omp-worker-append.md
+# Both files live in this directory. "Setting up worker panes" in SKILL.md owns
+# the launch command and what each file is for.
+#
+# This file is for WORKER panes. Never launch your own omp with it — you would
+# be handing yourself the same stripped-down agent a worker gets.
+#
+# Why it exists: a worker builds. It does not decide what gets built, what the
+# domain means, or who builds next. Those three categories are what this file
+# withholds; everything else omp and ~/.claude/skills offer, a worker keeps —
+# including the ones `implement` reaches for (`tdd`, `code-review`) and the ones
+# it may need mid-build (`diagnosing-bugs`, `resolving-merge-conflicts`,
+# `codebase-design`, `playwright-cli`). omp's own tools — browser, LSP, python,
+# sub-agents, web search — are untouched by any of this; skills and tools are
+# separate systems.
+#
+# A blocklist rather than an allow-list, decided 2026-07-28: an allow-list of
+# four was starving workers of skills they legitimately need, and its original
+# reason turned out to be false. omp *does* honour `disable-model-invocation`,
+# so every deciding skill is already absent from a worker's menu of what it may
+# fire on its own. What remains is a narrower risk — a hidden skill is still
+# loaded, and still runs if something names it outright (`/skill:to-spec`). The
+# names below are the ones where that would do lasting damage.
+#
+# Adding a name here is a deliberate act. The test is the sentence above: does
+# firing it decide scope, settle domain meaning, or move the fleet?
+
+skills:
+  ignoredSkills:
+    # Moves the fleet
+    - tmux-orchestrator # dispatches into panes — a worker must never drive workers
+    - setup-foreman
+    - relieve-and-handoff # splits panes and starts agents — driving, not describing
+    - wayfinder
+    # `handoff` is deliberately NOT here (2026-08-03). It only writes a document
+    # about the agent running it, which moves nobody. It was listed while a worker
+    # choosing to hand itself off was the risk; a director now does the choosing
+    # and sends `/handoff` into the worker's pane, so a worker that cannot run it
+    # breaks the routine. Describing yourself is not driving the fleet.
+    # Decides what gets built
+    - to-tickets
+    - to-spec
+    - triage
+    - commission-design
+    - ask-matt # the router that names every skill above
+    # Settles what the domain means — the manager's rulings only
+    - domain-modeling
+    - ubiquitous-language
