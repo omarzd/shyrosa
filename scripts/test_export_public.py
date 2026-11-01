@@ -12,6 +12,7 @@ exported. That list never ships, so in the public repo those tests skip, and so 
 the rulebook tests, since the public rulebook arrives already stripped.
 """
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -134,7 +135,8 @@ class Scratch(unittest.TestCase):
         git(self.pub, "add", "-A", env=self.env)
         git(self.pub, "commit", "-qm", "README and LICENSE", env=self.env)
         git(self.pub, "remote", "add", "origin", self.bare, env=self.env)
-        git(self.pub, "push", "-q", "origin", "main", env=self.env)
+        git(self.bare, "fetch", "-q", self.pub, "main:main", env=self.env)
+        git(self.pub, "fetch", "-q", "origin", env=self.env)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -231,6 +233,102 @@ class ExportsTheAllowlist(Scratch):
     def test_the_rulebook_leaves_without_its_citations(self):
         self.export()
         self.assertEqual(self.read_pub("WORKFLOW-RULEBOOK.md"), "# Rules\n\n- **A rule.** **(all)**\n")
+
+
+class PersonalChoices(Scratch):
+    def test_preference_files_are_not_exported_even_when_allowlisted(self):
+        preferences = {"fleet/preferences/user.json": '{"claude": {"python_install": "uv"}}\n',
+                       "fleet/preferences/machines/Darwin.json": '{"claude": {"python": "python3"}}\n',
+                       "fleet/preferences/machines/Linux.json": '{"claude": {"python_install": "pixi"}}\n'}
+        self.write(self.priv, {**preferences, "export/allowlist.txt": ALLOWLIST +
+                               "fleet/preferences/\nfleet/preferences/user.json -> copied-choice.json\n"})
+        head = self.commit_private("personal preferences")
+        # Remove copies left by an older export too.
+        self.write(self.pub, {**preferences, "copied-choice.json": preferences["fleet/preferences/user.json"]})
+        git(self.pub, "add", "-A", env=self.env)
+        git(self.pub, "commit", "-qm", "old personal copies", env=self.env)
+
+        run = self.export()
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.public_files(), {
+            "WORKFLOW-RULEBOOK.md", "wire.sh", "overlay/skill-a/SKILL.md", "README.md", "LICENSE"})
+        for rel, text in preferences.items():
+            self.assertFalse(os.path.exists(os.path.join(self.pub, rel)), rel)
+            with open(os.path.join(self.priv, rel)) as f:
+                self.assertEqual(f.read(), text)
+        self.assertFalse(os.path.exists(os.path.join(self.pub, "copied-choice.json")))
+        self.assertEqual(git(self.priv, "rev-parse", "HEAD", env=self.env), head)
+        self.assertEqual(git(self.priv, "status", "--porcelain", env=self.env), "")
+
+    def test_only_the_top_level_model_is_removed_from_public_settings(self):
+        settings = ('{\n  "model": "personal-choice",\n'
+                    '  "hooks": {"SessionStart": [{"model": "nested-value"}]},\n'
+                    '  "enabled": true, "count": 2, "empty": null,\n'
+                    '  "label": "café", "permissions": ["Read", "Bash"]\n}\n')
+        self.write(self.priv, {"export/allowlist.txt": ALLOWLIST + "fleet/\n",
+                               "fleet/settings.json": settings})
+        head = self.commit_private("personal model")
+        # The export must use the committed settings and leave an unsaved choice alone.
+        unsaved = settings.replace("personal-choice", "unsaved-choice")
+        self.write(self.priv, {"fleet/settings.json": unsaved})
+        before = git(self.priv, "status", "--porcelain", env=self.env)
+
+        run = self.export()
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        expected = {"hooks": {"SessionStart": [{"model": "nested-value"}]},
+                    "enabled": True, "count": 2, "empty": None,
+                    "label": "café", "permissions": ["Read", "Bash"]}
+        self.assertEqual(json.loads(self.read_pub("fleet/settings.json")), expected)
+        self.assertEqual(json.loads(git(self.pub, "show", "HEAD:fleet/settings.json",
+                                       env=self.env)), expected)
+        with open(os.path.join(self.priv, "fleet/settings.json")) as f:
+            self.assertEqual(f.read(), unsaved)
+        self.assertEqual(git(self.priv, "rev-parse", "HEAD", env=self.env), head)
+        self.assertEqual(git(self.priv, "show", "HEAD:fleet/settings.json", env=self.env),
+                         settings.strip())
+        self.assertEqual(git(self.priv, "status", "--porcelain", env=self.env), before)
+        before = git(self.pub, "rev-parse", "HEAD", env=self.env)
+        self.assertEqual(self.export().returncode, 0)
+        self.assertEqual(git(self.pub, "rev-parse", "HEAD", env=self.env), before)
+
+    def test_settings_without_a_model_keep_their_bytes(self):
+        settings = '{ "enabled": true, "hooks": {}, "label": "café" }\n'
+        self.write(self.priv, {"export/allowlist.txt": ALLOWLIST + "fleet/\n",
+                               "fleet/settings.json": settings})
+        self.commit_private("no model")
+        run = self.export()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.read_pub("fleet/settings.json"), settings)
+
+    def test_invalid_fleet_settings_are_refused_before_writing(self):
+        for settings in ('{"model": ', '[]', 'null', '"model"'):
+            with self.subTest(settings=settings):
+                self.write(self.priv, {"export/allowlist.txt": ALLOWLIST + "fleet/\n",
+                                       "fleet/settings.json": settings})
+                self.commit_private("invalid settings " + settings)
+                self.assert_untouched(self.export(), "fleet/settings.json", "JSON object")
+
+    def test_the_exported_fleet_model_check_accepts_the_public_default(self):
+        with open(os.path.join(_ROOT, "fleet", "test_settings.py")) as f:
+            model_check = f.read()
+        self.write(self.priv, {"export/allowlist.txt": ALLOWLIST + "fleet/\n",
+                               "fleet/settings.json": '{"model": "opus"}\n',
+                               "fleet/test_settings.py": model_check})
+        self.commit_private("fleet model check")
+        run = self.export()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        check = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "fleet",
+                                "-p", "test_settings.py", "-k", "model"],
+                               cwd=self.pub, capture_output=True, text=True, env=self.env)
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+        self.assertIn("Ran 1 test", check.stderr)
+        self.write(self.pub, {"fleet/settings.json": '{"model": "chosen-after-install"}\n'})
+        chosen = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "fleet",
+                                 "-p", "test_settings.py", "-k", "model"],
+                                cwd=self.pub, capture_output=True, text=True, env=self.env)
+        self.assertEqual(chosen.returncode, 0, chosen.stdout + chosen.stderr)
 
 
 class OneCommit(Scratch):
@@ -920,6 +1018,11 @@ class RealExport(unittest.TestCase):
 
     def test_what_landed_holds_no_private_word(self):
         self.assertEqual(guard_hits(self.pub, sorted(self.files)), [])
+
+    def test_the_versioned_changelog_ships_unchanged(self):
+        self.assertIn("CHANGELOG.md", self.files)
+        with open(os.path.join(self.pub, "CHANGELOG.md"), "rb") as f:
+            self.assertEqual(f.read(), ep.git(_ROOT, "show", "HEAD:CHANGELOG.md", binary=True))
 
     def test_matts_vendored_skills_ship_whole(self):
         vendored = set(git(_ROOT, "ls-tree", "-r", "--name-only", "HEAD", "upstream/").splitlines())

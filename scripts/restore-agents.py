@@ -15,8 +15,9 @@ prior worktree assignment from the resumed history before the next build action.
 The recorded directory is not evidence of an assignment. Dropping the saved task
 prompt is a property of how the command is built, not a filter someone maintains.
 
-Two kinds of pane are left alone. A name matching no session at all is skipped
-and reported, so no agent lands in a window it does not belong to. A pane
+Codex panes are skipped and reported because this restore does not resume Codex
+sessions. Two other kinds of pane are left alone. A name matching no session at
+all is skipped and reported, so no agent lands in a window it does not belong to. A pane
 already running an agent is skipped, so a by-hand run over a live board never
 stacks two agents in one pane.
 
@@ -55,6 +56,7 @@ import time
 
 SHELLS = {"fish", "bash", "zsh", "sh", "dash", "ksh", "tcsh", "csh"}
 AGENT_COMMANDS = {"claude", "claude.exe"}
+LIVE_AGENT_COMMANDS = AGENT_COMMANDS | {"codex", "pi"}
 
 
 def report(msg):
@@ -114,6 +116,11 @@ def parse_snapshot(path):
             elif parts[0] == "window" and len(parts) >= 4:
                 window_names[(parts[1], parts[2])] = _strip_leading_colon(parts[3])
     return panes, window_names
+
+
+def pane_target(pane, window_names):
+    window = window_names.get((pane["session"], pane["window_index"]), pane["window_index"])
+    return "%s:%s.%s" % (pane["session"], window, pane["pane_index"])
 
 
 def agent_name_from_title(title):
@@ -250,11 +257,13 @@ def return_to_shell(target):
     """Bring a pane holding a pager back to its shell prompt. resurrect restores
     saved scrollback by running a pager that never exits on its own, so the pane
     is sitting in one at the moment the restore runs (shyrosa#31 comment). Send
-    q until the shell is back; give up rather than type into a pager."""
+    q until the shell is back; stop if an agent appears while polling."""
     for _ in range(4):
         cmd = pane_command(target)
         if cmd in SHELLS:
             return True
+        if cmd in LIVE_AGENT_COMMANDS:
+            return False
         tmux("send-keys", "-t", target, "q")
         time.sleep(0.5)
     return pane_command(target) in SHELLS
@@ -295,12 +304,17 @@ def main():
         panes, window_names = parse_snapshot(snapshot)
     except OSError as exc:
         die("cannot read resurrect snapshot %s: %s" % (snapshot, exc))
-    agents = [p for p in panes if p["current_command"] in AGENT_COMMANDS]
     if args.session:
-        agents = [p for p in agents if p["session"] == args.session]
+        panes = [p for p in panes if p["session"] == args.session]
+    agents = [p for p in panes if p["current_command"] in AGENT_COMMANDS]
+    codex = [p for p in panes if p["current_command"] == "codex"]
+
+    for p in codex:
+        report("skip %s: restore does not resume Codex sessions" % pane_target(p, window_names))
 
     if not agents:
-        report("nothing to restore")
+        if not codex:
+            report("nothing to restore")
         return
 
     require_server()
@@ -309,12 +323,11 @@ def main():
     transcripts = scan_transcripts(needed)
 
     for p in agents:
-        window = window_names.get((p["session"], p["window_index"]), p["window_index"])
-        target = "%s:%s.%s" % (p["session"], window, p["pane_index"])
+        target = pane_target(p, window_names)
         name = agent_name_from_title(p["title"])
 
         live = pane_command(target)
-        if live in AGENT_COMMANDS:
+        if live in LIVE_AGENT_COMMANDS:
             report("skip %s: already running an agent" % target)
             continue
 
@@ -329,7 +342,8 @@ def main():
 
         flags = resume_flags(p["full_command"])
         command = "claude -r %s%s" % (session_id, (" " + flags) if flags else "")
-        prompt = ("Before your next build action, read your full resumed history "
+        prompt = ("From restore-agents.py, the reboot restore: "
+                  "Before your next build action, read your full resumed history "
                   "for an assigned worktree. A resume drops the worktree binding. "
                   "If you had an assigned worktree, use EnterWorktree to re-enter "
                   "that same worktree before building. If you were unbound, remain "

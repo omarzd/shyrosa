@@ -22,10 +22,12 @@ bare name and names the forms that work; it never claims you are outside tmux.
 
 ## Commands
 
+For message signing, follow `~/.shyrosa/WORKFLOW-RULEBOOK.md`, *Panes and dispatch*,
+the **Every message typed into another agent's session** rule.
+
 `send`, `send-raw` and `enter` check the target's foreground process before
-typing. They refuse with a non-zero exit and name the process when it is neither
-a shell nor an agent CLI. Read the pane before deciding how to return it to a
-shell or agent.
+typing. If the process is neither a shell nor an agent CLI, they exit non-zero
+and name it. Read the pane before deciding how to return it to a shell or agent.
 
 - `panes [session]`. List every pane in a session: pane id, window, running
   command, pid, title. Its WINDOW column supplies the `<target>` below. A name
@@ -286,7 +288,7 @@ cannot be read as a prompt.
 **Quitting starts the next ticket.** A further round on the ticket just built, a
 gate finding or a fix, resumes that agent's prior session instead
 (`claude --resume <id> --model <copied> --effort <copied> --permission-mode <copied>`),
-which still holds why it built things that way. Copy each value from that session's
+which retains its reasons for the implementation. Copy each value from that session's
 launch settings, as `scripts/restore-agents.py` does for reboot restore. A bare
 resume can reset effort to the account default. Check the footer after resuming,
 then repeat the worktree entry step above before any build action. Quitting

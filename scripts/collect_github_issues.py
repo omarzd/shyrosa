@@ -170,12 +170,17 @@ def build_lines(root, cfg, by_label, grills, studio, building, stamp):
     for t in studio:
         L.append(("row", f"STUDIO-QUEUE — {t}", "STUDIO-QUEUE.md", f"{studio_page}#{slug(t)}" if studio_page else None))
 
-    L.append(("h2", "THE DIRECTOR'S DESK — counted so you can skip it", None, None))
+    L.append(("h2", "WAITING ON YOU", None, None))
     if by_label is None:
         L.append(("row", "COUNT FAILED — see above", issues_url, issues_url))
     else:
         u = issues_url + "?q=is%3Aopen+label%3Aready-for-human"
         L.append(("row", f"{len(by_label.get('ready-for-human', []))} tickets at ready-for-human", u, u))
+
+    L.append(("h2", "MOVING WITHOUT YOU", None, None))
+    if by_label is None:
+        L.append(("row", "COUNT FAILED — see above", issues_url, issues_url))
+    else:
         u = issues_url + "?q=is%3Aopen+label%3Aneeds-info"
         L.append(("row", f"{len(by_label.get('needs-info', []))} tickets at needs-info", u, u))
         u = issues_url + "?q=is%3Aopen+label%3Aready-for-agent"

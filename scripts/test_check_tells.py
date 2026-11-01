@@ -242,16 +242,19 @@ class TextModeSubprocess(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_crash_exits_neither_0_nor_2_nor_corpus_modes_1(self):
-        # Invalid UTF-8 on stdin makes stdin.read() raise. A crash must never read as
-        # a pass or a break, and it must not collide with corpus mode's exit 1.
+        # Force strict UTF-8 in this child so invalid stdin raises even when the
+        # parent uses surrogateescape. A crash must not pass or report prose breaks,
+        # and it must not collide with corpus mode's exit 1.
         root = _scratch_root()
         self.addCleanup(lambda: subprocess.run(["rm", "-rf", root]))
         result = subprocess.run(
             [sys.executable, _SCRIPT, "--text", root],
             input=b"\xff\xfe not valid utf-8",
             capture_output=True,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8:strict"},
         )
-        self.assertEqual(result.returncode, 3)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(b"TELLS check --text crashed:", result.stderr)
 
 
 class HookVersusTextParity(unittest.TestCase):

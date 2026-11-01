@@ -188,3 +188,11 @@ manager's decision, because he is the reader every one of them has to work for.
 - **fleet settings**: the one Claude Code user settings file, `fleet/settings.json` in this repo,
   that every machine's `~/.claude/settings.json` links to. A `/config` change on any machine edits
   it, so the machines cannot drift apart. Every key in it is shared.
+- **user preference**: a person's choice of tool or setting that follows them to every machine they
+  set up, such as the manager's conda-forge channel with `conda install` over `pip`. A fresh
+  install carries none (g39, 2026-10-30).
+- **machine preference**: a choice that holds on every machine of one kind, such as every Mac or
+  every Linux machine. The kind is the operating system running at that moment, detected, never
+  named by hand: a MacBook booted into Asahi Linux is a Linux machine, and a VM is the kind of
+  its own operating system. Where it and a user preference speak to the same thing, the machine
+  preference wins on machines of its kind (g39, 2026-10-30).

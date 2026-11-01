@@ -12,7 +12,7 @@ tmux with TMUX unset and TMUX_TMPDIR pointed at a scratch dir builds a server
 the live one cannot see, and setting TMUX to that server's own socket path
 exercises the variable-present branch while still resolving against the
 isolated server. Neither needs a change to the script. Every test stands up its
-own server and reaps it in tearDown, including on failure, so the default
+own server and reaps it with addCleanup, including on setup failure, so the default
 socket is never touched and no session is left behind.
 """
 import os
@@ -49,7 +49,7 @@ class OrchestrateBase(unittest.TestCase):
         self.socket = os.path.join(self.tmpdir, "tmux-%d" % os.getuid(), "default")
         self._tmux(
             "-f", "/dev/null", "new-session", "-d", "-s", _SESSION,
-            "-x", "80", "-y", "24", "/bin/bash --noprofile --norc -i",
+            "-n", "fixture", "-x", "80", "-y", "24", "/bin/bash --noprofile --norc -i",
             check=True,
         )
         self.pane_id = self._tmux("list-panes", "-t", _SESSION, "-F", "#{pane_id}").strip()
@@ -107,6 +107,35 @@ class OrchestrateBase(unittest.TestCase):
         self._tmux("send-keys", "-t", self.pane_id, "Enter", check=True)
         self._wait_command("less")
         self._wait_text("pager-line-000")
+
+    def _start_agent(self, agent):
+        # Freshly compiled executables give tmux real foreground names without
+        # running an agent. Scripts report their interpreter; copied executables
+        # can fail macOS code-signing checks. Match restore-agents' fixture.
+        cc = shutil.which("cc") or shutil.which("clang")
+        if not cc:
+            self.skipTest("a C compiler is required for synthetic agent CLIs")
+        source = (
+            '#include <stdio.h>\n'
+            'int main(void) {\n'
+            '  char line[256];\n'
+            '  puts("agent-ready"); fflush(stdout);\n'
+            '  while (fgets(line, sizeof line, stdin)) {\n'
+            '    printf("agent-received:%s", line); fflush(stdout);\n'
+            '  }\n'
+            '  return 0;\n'
+            '}\n'
+        )
+
+        path = os.path.join(self.tmpdir, agent)
+        subprocess.run(
+            [cc, "-x", "c", "-o", path, "-"], input=source,
+            capture_output=True, text=True, check=True,
+        )
+        self._tmux("send-keys", "-t", self.pane_id, "-l", "--", shlex.quote(path), check=True)
+        self._tmux("send-keys", "-t", self.pane_id, "Enter", check=True)
+        self._wait_command(agent)
+        self._wait_text("agent-ready")
 
     def _server_env(self):
         """Environment that reaches the isolated server with TMUX unset."""
@@ -281,36 +310,12 @@ class ForegroundProcessGuard(OrchestrateBase):
         self._wait_text("\nshell-received:raw")
 
     def test_agent_clis_receive_send_raw_and_enter(self):
-        # Freshly compiled executables give tmux real foreground names without
-        # running an agent. Scripts report their interpreter; copied executables
-        # can fail macOS code-signing checks. Match restore-agents' fixture.
-        cc = shutil.which("cc") or shutil.which("clang")
-        if not cc:
-            self.skipTest("a C compiler is required for synthetic agent CLIs")
-        source = (
-            '#include <stdio.h>\n'
-            'int main(void) {\n'
-            '  char line[256];\n'
-            '  puts("agent-ready"); fflush(stdout);\n'
-            '  while (fgets(line, sizeof line, stdin)) {\n'
-            '    printf("agent-received:%s", line); fflush(stdout);\n'
-            '  }\n'
-            '  return 0;\n'
-            '}\n'
-        )
         for agent in ("claude", "claude.exe", "codex", "pi"):
             with self.subTest(agent=agent):
-                path = os.path.join(self.tmpdir, agent)
-                subprocess.run(
-                    [cc, "-x", "c", "-o", path, "-"], input=source,
-                    capture_output=True, text=True, check=True,
-                )
-                self._tmux("send-keys", "-t", self.pane_id, "-l", "--", shlex.quote(path), check=True)
-                self._tmux("send-keys", "-t", self.pane_id, "Enter", check=True)
-                self._wait_command(agent)
-                self._wait_text("agent-ready")
+                self._start_agent(agent)
 
-                sent, raw = agent + "-sent", agent + "-raw"
+                signature = "From fixture, test (orch:fixture): "
+                sent, raw = signature + agent + "-sent", signature + agent + "-raw"
                 proc = self.run_orch("send", self.pane_id, sent)
                 self.assertEqual(proc.returncode, 0, _joined(proc))
                 self.assertIn("submitted to", proc.stdout)
@@ -330,6 +335,77 @@ class ForegroundProcessGuard(OrchestrateBase):
                 self._wait_command("bash")
 
 
+class AgentMessageSigning(OrchestrateBase):
+    """Messages to stand-in agents obey the signing rule before any typing."""
+
+    _UNSIGNED_COMMANDS = (
+        "/grill-spec ticket-150",
+        "$grill-spec ticket-150",
+        "/handoff unsigned-token",
+        "$implement unsigned-token",
+    )
+
+    def test_unsigned_messages_refuse_without_typing(self):
+        self._check_messages((
+            "unsigned-token",
+            "please From fixture, test: unsigned-token",
+        ), refused=True)
+
+    def test_unsigned_commands_are_not_submitted(self):
+        self._check_messages(self._UNSIGNED_COMMANDS, refused=True, subs=("send",))
+
+    def test_unsigned_commands_can_be_staged_for_the_manager(self):
+        self._check_messages(self._UNSIGNED_COMMANDS, subs=("send-raw",))
+
+    def test_signed_messages_are_delivered(self):
+        self._check_messages(("From fixture, test (orch:fixture): signed-token",))
+
+    def test_signed_commands_are_delivered(self):
+        self._check_messages((
+            "/handoff From fixture, test (orch:fixture): relief",
+            "$implement From fixture, test (orch:fixture): #150",
+        ))
+
+    def test_bare_commands_are_delivered_unsigned(self):
+        self._check_messages(("/exit", "/clear"))
+
+    def test_backslash_is_not_a_command(self):
+        self._check_messages((
+            r"\unsigned",
+            r"\handoff From fixture, test: unsigned-token",
+        ), refused=True)
+
+    def _check_messages(self, messages, refused=False, subs=("send", "send-raw")):
+        for agent in ("claude", "claude.exe", "codex", "pi"):
+            for sub in subs:
+                self._tmux("send-keys", "-t", self.pane_id, "C-l", check=True)
+                self._start_agent(agent)
+                for message in messages:
+                    with self.subTest(agent=agent, sub=sub, message=message):
+                        before = self._tmux("capture-pane", "-p", "-t", self.pane_id)
+                        proc = self.run_orch(sub, self.pane_id, message)
+                        if refused:
+                            self.assertRefused(proc, "From <name>, <role> (<pane address>):")
+                            self.assertEqual(before, self._tmux(
+                                "capture-pane", "-p", "-t", self.pane_id,
+                            ))
+                        else:
+                            self.assertEqual(proc.returncode, 0, _joined(proc))
+                            received = "agent-received:" + message
+                            if sub == "send-raw":
+                                # A fresh transcript distinguishes this delivery
+                                # from the same message sent with Enter above.
+                                self._wait_text("\n" + message)
+                                self.assertNotIn(received, self._tmux(
+                                    "capture-pane", "-p", "-t", self.pane_id,
+                                ))
+                                proc = self.run_orch("enter", self.pane_id)
+                                self.assertEqual(proc.returncode, 0, _joined(proc))
+                            self._wait_text(received)
+                self._tmux("send-keys", "-t", self.pane_id, "C-c", check=True)
+                self._wait_command("bash")
+
+
 class SendClosesWithResolvedTarget(OrchestrateBase):
     """send's closing line names the resolved session, window and pane.
 
@@ -339,6 +415,23 @@ class SendClosesWithResolvedTarget(OrchestrateBase):
 
     def _resolved_prefix(self):
         return self.resolved
+
+    def test_delayed_sends_keep_the_fixture_identity(self):
+        # Wait past tmux's automatic-name update, which changed the original
+        # fixture's window name between setup and the send assertion.
+        time.sleep(1.5)
+        self.assertEqual(self.resolved, "orch:fixture.0")
+        self.assertEqual(self._tmux(
+            "display-message", "-p", "-t", self.pane_id,
+            "#{session_name}:#{window_name}.#{pane_index}", check=True,
+        ).strip(), "orch:fixture.0")
+        for target, tmux_set in (
+            (self.pane_id, False), ("orch:", False), ("orch", True),
+        ):
+            with self.subTest(target=target):
+                proc = self.run_orch("send", target, "echo", "verify-token", tmux_set=tmux_set)
+                self.assertEqual(proc.returncode, 0, _joined(proc))
+                self.assertIn("submitted to orch:fixture.0: echo verify-token", proc.stdout)
 
     def test_pane_id_target_resolves(self):
         proc = self.run_orch("send", self.pane_id, "echo", "verify-token")

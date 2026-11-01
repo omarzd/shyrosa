@@ -29,6 +29,8 @@ class FleetSettings(unittest.TestCase):
         self.assertIs(s["autoMemoryEnabled"], False)
         self.assertEqual(s["env"]["CLAUDE_CODE_DISABLE_AUTO_MEMORY"], "1")
 
+    @unittest.skipUnless(os.path.exists(os.path.join(_HERE, "..", "export", "private-terms.txt")),
+                         "the model choice stays in the private repo")
     def test_model_is_the_opus_alias_with_no_window_size(self):
         self.assertEqual(load()["model"], "opus")
 
@@ -41,6 +43,20 @@ class FleetSettings(unittest.TestCase):
                     for h in entry["hooks"]]
         for script in ("check-writing-for-agents.py", "check-handoff-write.py"):
             self.assertTrue(any(script in c for c in commands), script)
+
+    def test_preferences_are_briefed_at_session_start(self):
+        hooks = [hook
+                 for entry in load()["hooks"]["SessionStart"]
+                 for hook in entry["hooks"]]
+        self.assertIn({"type": "command",
+                       "command": "python3 ~/.shyrosa/scripts/preferences.py --brief"}, hooks)
+
+    def test_python_install_preference_guard_is_hooked_on_bash(self):
+        commands = [h["command"]
+                    for entry in load()["hooks"]["PreToolUse"]
+                    if entry.get("matcher") == "Bash"
+                    for h in entry["hooks"] if h.get("type") == "command"]
+        self.assertIn("python3 ~/.shyrosa/scripts/check-preferences.py", commands)
 
     def test_no_machine_path(self):
         with open(PATH) as f:

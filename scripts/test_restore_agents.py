@@ -100,22 +100,27 @@ class RestoreBase(unittest.TestCase):
             self.fail("tmux %s failed: %s" % (" ".join(args), proc.stderr))
         return proc.stdout
 
-    def _fake_claude(self):
-        """A binary named claude, so a pane running it reports its command as
-        `claude`. It has to be a freshly built binary: a copied one loses its
+    def _fake_agent(self, command):
+        return self._compile_command(
+            command, "#include <unistd.h>\nint main(void){pause();return 0;}\n"
+        )
+
+    def _compile_command(self, command, source):
+        """A binary named for an agent, so tmux reports that command.
+        It has to be a freshly built binary: a copied one loses its
         signature and macOS kills it, and a script or symlink reports the
-        interpreter's name, not claude. Compiled here, it just blocks."""
-        dst = os.path.join(self.bin, "claude")
+        interpreter's name."""
+        dst = os.path.join(self.bin, command)
         cc = shutil.which("cc") or shutil.which("clang")
         if not cc:
-            self.skipTest("no C compiler to build a fake claude binary")
+            self.skipTest("no C compiler to build a fake agent binary")
         proc = subprocess.run(
             [cc, "-x", "c", "-o", dst, "-"],
-            input="#include <unistd.h>\nint main(void){pause();return 0;}\n",
+            input=source,
             capture_output=True, text=True,
         )
         if proc.returncode != 0:
-            self.skipTest("could not compile a fake claude binary: %s" % proc.stderr)
+            self.skipTest("could not compile a fake agent binary: %s" % proc.stderr)
         return dst
 
     def _wait_command(self, target, expected, timeout=5.0):
@@ -142,6 +147,7 @@ class RestoreBase(unittest.TestCase):
         else:
             self._tmux("new-window", "-t", "%s:" % session, "-n", window_name)
         target = "%s:%s" % (session, window_name)
+        self._tmux("set-window-option", "-t", target, "automatic-rename", "off")
         win_index = self._tmux(
             "display-message", "-p", "-t", target, "#{window_index}"
         ).strip()
@@ -154,7 +160,8 @@ class RestoreBase(unittest.TestCase):
     def _snapshot_target(self, session, window_name, pane_index):
         return "%s:%s.%s" % (session, window_name, pane_index)
 
-    def add_agent(self, session, window_name, name, cwd, launch="claude", live="shell"):
+    def add_agent(self, session, window_name, name, cwd, launch="claude", live="shell",
+                  current_command="claude.exe"):
         """Record an agent pane in the snapshot and set the matching live pane's
         state. live is 'shell' (fresh prompt), 'claude' (already an agent), or a
         command string to run so the pane holds that process (a pager, say)."""
@@ -163,7 +170,7 @@ class RestoreBase(unittest.TestCase):
         if live == "claude":
             # Run the fake by absolute path so a fish `claude` function cannot
             # shadow it into launching a real agent; the process is named claude.
-            self._tmux("send-keys", "-t", target, self._fake_claude(), "Enter")
+            self._tmux("send-keys", "-t", target, self._fake_agent("claude"), "Enter")
             self._wait_command(target, "claude")
         elif live != "shell":
             self._tmux("send-keys", "-t", target, live, "Enter")
@@ -171,7 +178,7 @@ class RestoreBase(unittest.TestCase):
         self._panes.append({
             "session": session, "window_index": win_index, "pane_index": pane_index,
             "title": "✳ " + name, "cwd": cwd,
-            "current_command": "claude.exe", "full_command": launch,
+            "current_command": current_command, "full_command": launch,
         })
         return self._snapshot_target(session, window_name, pane_index)
 
@@ -232,6 +239,10 @@ class RestoreBase(unittest.TestCase):
 
     def pane_text(self, target, lines=30):
         return self._tmux("capture-pane", "-p", "-t", target, "-S", "-%d" % lines)
+
+    def read_log(self):
+        with open(os.path.join(self.resurrect_dir, "restore-agents.log"), encoding="utf-8") as fh:
+            return fh.read()
 
     def restored_argv(self):
         deadline = time.time() + 5
@@ -377,6 +388,100 @@ class AgentVersusShell(RestoreBase):
         self.assertNotIn(shell, proc.stdout)
 
 
+class CodexSkipped(RestoreBase):
+    def assert_codex_skips(self, proc, targets):
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        expected = ["skip %s: restore does not resume Codex sessions" % target
+                    for target in targets]
+        self.assertEqual([line for line in proc.stdout.splitlines()
+                          if line.startswith("skip ")], expected)
+        log = self.read_log()
+        self.assertEqual([line.split(" INFO ", 1)[1] for line in log.splitlines()
+                          if " INFO skip " in line], expected)
+        self.assertNotIn("nothing to restore", proc.stdout)
+        self.assertNotIn("nothing to restore", log)
+
+    def test_mixed_snapshot_restores_claude_and_reports_codex_once(self):
+        claude = self.add_agent("proj", "flow", "n1", "/work/proj",
+                                current_command="claude")
+        codex = self.add_agent("proj", "worker-1", "shyrosa->134", "/work/proj",
+                               launch="codex -m gpt-6.1-sol", current_command="codex")
+        self.make_transcript("n1", "/work/proj", "sid1")
+        before = self.pane_text(codex)
+
+        proc = self.run_cmd()
+
+        self.assert_codex_skips(proc, [codex])
+        self.assertIn("restored %s: claude -r sid1" % claude, proc.stdout)
+        self.assertIn("restored %s: claude -r sid1" % claude, self.read_log())
+        self.assertEqual(self.restored_argv()[0:2], ["-r", "sid1"])
+        self.assertEqual(self.pane_text(codex), before)
+
+    def test_codex_only_snapshot_reports_every_pane_without_a_resume(self):
+        targets = [self.add_agent("proj", window, name, "/work/proj",
+                                   launch="codex", current_command="codex")
+                   for window, name in (("worker-1", "shyrosa->134"),
+                                        ("worker-2", "shyrosa->135"))]
+        # Even a matching Claude transcript must not make a Codex pane resumable.
+        self.make_transcript("shyrosa->134", "/work/proj", "sid1")
+        before = [self.pane_text(target) for target in targets]
+
+        proc = self.run_cmd()
+
+        self.assert_codex_skips(proc, targets)
+        self.assertEqual(len(proc.stdout.splitlines()), 2)
+        self.assertFalse(os.path.exists(self.argv_path))
+        self.assertEqual([self.pane_text(target) for target in targets], before)
+
+    def test_session_filter_excludes_other_claude_and_codex_panes_from_reports(self):
+        claude = self.add_agent("proja", "flow", "a1", "/work/a")
+        codex = self.add_agent("proja", "worker-1", "shyrosa->134", "/work/a",
+                               launch="codex", current_command="codex")
+        other_claude = self.add_agent("projb", "flow", "b1", "/work/b")
+        other_codex = self.add_agent("projb", "worker-1", "other-worker", "/work/b",
+                                     launch="codex", current_command="codex")
+        self.make_transcript("a1", "/work/a", "sid-a")
+        self.make_transcript("b1", "/work/b", "sid-b")
+
+        proc = self.run_cmd("--session", "proja")
+
+        self.assert_codex_skips(proc, [codex])
+        self.assertIn("restored %s: claude -r sid-a" % claude, proc.stdout)
+        for target in (other_claude, other_codex):
+            self.assertNotIn(target, proc.stdout)
+            self.assertNotIn(target, self.read_log())
+            self.assertNotIn("claude -r", self.pane_text(target))
+
+    def test_dry_run_reports_codex_and_sends_no_keystrokes_to_either_agent(self):
+        claude = self.add_agent("proj", "flow", "n1", "/work/proj")
+        codex = self.add_agent("proj", "worker-1", "shyrosa->134", "/work/proj",
+                               launch="codex", live="cat", current_command="codex")
+        self.make_transcript("n1", "/work/proj", "sid1")
+        before = [self.pane_text(target) for target in (claude, codex)]
+
+        proc = self.run_cmd("--dry-run")
+
+        self.assert_codex_skips(proc, [codex])
+        self.assertIn("plan %s: claude -r sid1" % claude, proc.stdout)
+        self.assertFalse(os.path.exists(self.argv_path))
+        self.assertEqual([self.pane_text(target) for target in (claude, codex)], before)
+
+    def test_shell_and_other_commands_are_ignored_without_a_report(self):
+        codex = self.add_agent("proj", "worker-1", "shyrosa->134", "/work/proj",
+                               launch="codex", current_command="codex")
+        shell = self.add_shell("proj", "shell", "/work/proj")
+        other = self.add_agent("proj", "other", "other", "/work/proj",
+                               launch="python3 app.py", current_command="python3")
+
+        proc = self.run_cmd()
+
+        self.assert_codex_skips(proc, [codex])
+        self.assertEqual(len(proc.stdout.splitlines()), 1)
+        for target in (shell, other):
+            self.assertNotIn(target, proc.stdout)
+            self.assertNotIn(target, self.read_log())
+
+
 class ResolveBySessionId(RestoreBase):
     def test_newest_matching_candidate_wins(self):
         t = self.add_agent("proj", "flow", "shared", "/work/proj", launch="claude -n shared")
@@ -451,6 +556,24 @@ class ResolutionMutationGate(RestoreBase):
 
 
 class AlreadyRunning(RestoreBase):
+    def test_known_live_agents_receive_no_keystrokes(self):
+        for agent in ("claude", "claude.exe", "codex", "pi"):
+            with self.subTest(agent=agent):
+                t = self.add_agent("proj", agent.replace(".", "-"), agent, "/work/proj",
+                                   current_command="claude")
+                self.make_transcript(agent, "/work/proj", "sid-" + agent)
+                self._tmux("send-keys", "-t", t, self._fake_agent(agent), "Enter")
+                self._wait_command(t, agent)
+                before = self.pane_text(t)
+
+                proc = self.run_cmd()
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn("skip %s: already running an agent" % t, proc.stdout)
+                self.assertIn("skip %s: already running an agent" % t, self.read_log())
+                self.assertEqual(self.pane_text(t), before)
+                self.assertFalse(os.path.exists(self.argv_path))
+
     def test_pane_already_running_an_agent_is_skipped(self):
         t = self.add_agent("proj", "flow", "n1", "/work/proj",
                            launch="claude -n n1", live="claude")
@@ -484,10 +607,6 @@ class NothingToRestore(RestoreBase):
 
 
 class RestoreLog(RestoreBase):
-    def read_log(self):
-        with open(os.path.join(self.resurrect_dir, "restore-agents.log"), encoding="utf-8") as fh:
-            return fh.read()
-
     def test_selected_older_snapshot_and_its_decisions_are_logged(self):
         target = self.add_agent("proj", "flow", "n1", "/work/proj")
         skipped = self.add_agent("proj", "ghost", "ghost", "/work/proj")
@@ -636,6 +755,7 @@ class FiringLandsInThePane(RestoreBase):
         ])
         self.assertEqual(len(argv), 9, argv)
         prompt = argv[-1]
+        self.assertTrue(prompt.startswith("From restore-agents.py, the reboot restore: "), prompt)
         self.assertIn("EnterWorktree", prompt)
         self.assertIn("resumed history", prompt)
         self.assertIn("assigned worktree", prompt)
@@ -655,6 +775,7 @@ class FiringLandsInThePane(RestoreBase):
         self.assertEqual(argv[:2], ["-r", "sid-director"])
         self.assertEqual(len(argv), 3, argv)
         prompt = argv[-1]
+        self.assertTrue(prompt.startswith("From restore-agents.py, the reboot restore: "), prompt)
         self.assertIn("If you were unbound, remain unbound", prompt)
         self.assertIn("do not create a worktree or bind the main checkout", prompt)
         self.assertNotIn(main, prompt)
@@ -672,6 +793,47 @@ class FiringLandsInThePane(RestoreBase):
 
 
 class PagerBeforeThePrompt(RestoreBase):
+    def test_recovery_stops_when_a_known_agent_appears_after_a_pager(self):
+        pager = self._compile_command("less", r"""
+#include <termios.h>
+#include <unistd.h>
+int main(int argc, char **argv) {
+    struct termios original, direct;
+    char key;
+    if (argc != 2 || tcgetattr(0, &original) != 0) return 1;
+    direct = original;
+    direct.c_lflag &= ~ICANON;
+    direct.c_cc[VMIN] = 1;
+    direct.c_cc[VTIME] = 0;
+    if (tcsetattr(0, TCSANOW, &direct) != 0) return 1;
+    if (read(0, &key, 1) != 1 || key != 'q') return 1;
+    if (tcsetattr(0, TCSANOW, &original) != 0) return 1;
+    execl(argv[1], argv[1], (char *)0);
+    return 1;
+}
+""")
+        for agent in ("claude", "claude.exe", "codex", "pi"):
+            with self.subTest(agent=agent):
+                binary = self._fake_agent(agent)
+                t = self.add_agent("proj", agent.replace(".", "-"), agent, "/work/proj",
+                                   current_command="claude")
+                self.make_transcript(agent, "/work/proj", "sid-" + agent)
+                self._tmux("send-keys", "-t", t, pager + " " + binary, "Enter")
+                self._wait_command(t, "less")
+                before = self.pane_text(t)
+
+                proc = self.run_cmd()
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self._wait_command(t, agent)
+                # Only the pager's exit key may appear. Any later q would be
+                # left in the agent's composer; Enter or a resume is forbidden.
+                after = self.pane_text(t)
+                self.assertEqual(after.count("q"), before.count("q") + 1, after)
+                self.assertIn("skip %s:" % t, proc.stdout)
+                self.assertNotIn("claude -r", after)
+                self.assertFalse(os.path.exists(self.argv_path))
+
     def test_a_pane_holding_a_pager_is_returned_to_its_shell_first(self):
         # resurrect leaves the pane in a pager; the resume must land in the shell
         # behind it, not in the pager.

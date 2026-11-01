@@ -17,6 +17,7 @@ import html
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_config  # noqa: E402
@@ -63,6 +64,14 @@ def record_board_changed(root, md_path, new_md):
         fh.write("1" if changed else "0")
 
 
+def read_optional_asset(path):
+    """An unavailable presentation asset must not stop the rest of the Stop hook."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ""
+
+
 def write_html(lines, dest, page_title):
     body = []
     in_list = False
@@ -87,20 +96,24 @@ def write_html(lines, dest, page_title):
         elif kind == "note":
             close_list()
             body.append(f"<p class='hold'>{t}</p>")
+    close_list()
+    assets = Path(__file__).resolve().parent
+    style = read_optional_asset(assets / "board.css")
+    theme_script = read_optional_asset(assets / "board-theme.js")
+    toggle = '<button type="button" id="theme-toggle" aria-pressed="false">Dark mode</button>' if theme_script else ""
     doc = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>{page_title}</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(page_title)}</title>
 <style>
-  body {{ font-family: -apple-system, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }}
-  h1 {{ font-size: 1.2rem; border-bottom: 2px solid currentColor; padding-bottom: .4rem; }}
-  h2 {{ font-size: 1rem; margin-top: 1.6rem; }}
-  a {{ color: inherit; }}
-  .hold {{ margin-top: 2rem; font-weight: 600; border-top: 1px solid currentColor; padding-top: .6rem; }}
-  @media (prefers-color-scheme: dark) {{ body {{ background: #1a1a1a; color: #ddd; }} }}
-</style></head><body>
+{style}
+</style>
+<script>{theme_script}</script></head><body><main>
+{toggle}
 {os.linesep.join(body)}
-</body></html>
+</main></body></html>
 """
-    with open(dest, "w") as fh:
+    with open(dest, "w", encoding="utf-8") as fh:
         fh.write(doc)
 
 

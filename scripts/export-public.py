@@ -4,8 +4,10 @@
     scripts/export-public.py [--from <private repo>] <public checkout>
 
 Reads export/allowlist.txt and every file it names as they stand at the private
-repo's HEAD commit, never the working tree. The rulebook loses its ledger
-citations on the way, and every other file loses its pointers into the ledger. Then the guard reads every public path and every file
+repo's HEAD commit, never the working tree. Personal files under fleet/preferences/
+never ship, even if allowlisted. The public fleet settings lose their top-level
+model key. The rulebook loses its ledger citations on the way, and other exported
+prose loses its pointers into the ledger. Then the guard reads every public path and every file
 about to be written for the terms in export/private-terms.txt: one hit stops the
 run before anything is written, and names the file, the line and the term. A
 clean run makes the public checkout hold exactly the allowlisted paths, checks
@@ -15,6 +17,7 @@ identity whatever the machine's git config says, with hooks and machine-wide
 attributes off. It never pushes: the push is the manager's word.
 """
 import argparse
+import json
 import os
 import posixpath
 import re
@@ -99,6 +102,8 @@ def export_set(repo, rev):
         refuse(f"the allowlist names paths HEAD does not hold: {', '.join(unmatched)}")
     picked = {}
     for path, (mode, oid) in tree.items():
+        if covers("fleet/preferences/", path):
+            continue
         if any(covers(exc, path) for exc in excludes):
             continue
         if path in renames:
@@ -260,10 +265,22 @@ def main(argv=None):
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             refuse(f"{src} is not valid UTF-8, so the guard cannot read it")
-        stripped = strip_citations(text) if src == RULEBOOK else text
-        stripped = strip_ledger_mentions(stripped)
-        if stripped != text:
-            text, data = stripped, stripped.encode()
+        if src == "fleet/settings.json":
+            try:
+                settings = json.loads(text)
+            except json.JSONDecodeError:
+                refuse(f"{src} is not a valid JSON object")
+            if not isinstance(settings, dict):
+                refuse(f"{src} is not a valid JSON object")
+            if "model" in settings:
+                del settings["model"]
+                text = json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
+                data = text.encode()
+        else:
+            stripped = strip_citations(text) if src == RULEBOOK else text
+            stripped = strip_ledger_mentions(stripped)
+            if stripped != text:
+                text, data = stripped, stripped.encode()
         files[dest], texts[dest] = (data, mode), text
 
     hits = [f"{dest}: private term '{t}' in the path"

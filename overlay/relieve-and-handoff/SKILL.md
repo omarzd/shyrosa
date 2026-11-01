@@ -5,7 +5,11 @@ description: Relieve an agent whose context is filling up, handing its work to a
 
 # Relieving an agent
 
-Relief is the **foreman's** duty, at every level below the manager: the foreman relieves directors and workers both, and the manager relieves the foreman (his ruling, g04, 2026-08-16). A director relieves nobody. **Worker relief is inform-only:** send the project's director one line. Name the pane, the ticket, and that you are relieving now. Then act without waiting; a mistimed relief is cheap by design, so a permission round-trip buys nothing. If you are not the foreman and a session is filling, the agent needing relief is you or yours: say so to whoever watches you, and stop. Judging your own state is the one judgement that fails exactly when it is needed.
+The **foreman** relieves directors and workers; the manager relieves the foreman (his ruling, g04, 2026-08-16). A director relieves nobody.
+
+**Worker relief is inform-only.** Send the project's director one line naming the pane, the ticket, and that relief starts now: `From <foreman's name>, the foreman (<its pane address>): <pane>, <ticket>, relieving now.` Then act without waiting. A mistimed relief is cheap by design, so asking permission adds no protection.
+
+If you are not the foreman and a session is filling, the agent needing relief is you or yours. Tell whoever watches you, and stop. Judging your own state fails when you most need that judgement.
 
 An agent between jobs, holding nothing worth carrying, needs no handoff. Quit it and relaunch on the next task (`tmux-orchestrator`). Relief is for an agent whose context **is** the valuable thing: mid-work, or sitting at a gate for a fix round only it can do well.
 
@@ -35,9 +39,11 @@ Read the agent's context fill from its transcript. A question put into its windo
 
 ## The routine
 
-1. **Ask for calm**, when it is not calm already. Send: *"You are about to be handed off. Finish only what would be lost or left broken if you stopped right now. Leave everything else for the next agent."* It judges what cannot wait. That judgement is its own. *Done when* its transcript shows all three conditions hold.
-2. **Send `/handoff`** into its pane. *Done when* the document exists.
-3. **Split its window** and start the fresh agent there, told to read the document at its path. The commands are `tmux-orchestrator`'s, under *Relieving an agent in place*. *Done when* an agent is running in the new pane.
+For the message-signing rule, read `~/.shyrosa/WORKFLOW-RULEBOOK.md`, *Panes and dispatch*.
+
+1. **Ask for calm** if the agent is not calm already. Send: *"From <foreman's name>, the foreman (<its pane address>): You are about to be handed off. Finish only what would be lost or left broken if you stopped right now. Leave everything else for the next agent."* The agent decides what cannot wait. *Done when* its transcript shows all three conditions hold.
+2. **Send `/handoff`** into its pane: `/handoff From <foreman's name>, the foreman (<its pane address>): <what the next session is for>`. *Done when* the document exists.
+3. **Split its window** and start the fresh agent there, told to read the document at its path. Its launch prompt opens: `From <foreman's name>, the foreman (<its pane address>): Read <handoff path>.` The commands are `tmux-orchestrator`'s, under *Relieving an agent in place*. *Done when* an agent is running in the new pane.
 
    **The name says what the pane is, so relief renames it only when that changed.** A worker's name is its ticket, and relief swaps who is building it, not which ticket it is. So the ticket handle is fixed across the relief, and the successor launches under that handle with an index appended after a dot: the second agent on the ticket is `<handle>.2`, the third `.3`, the fourth `.4`. Work the index out by counting the sessions already answering to that handle, so nothing stores a counter and nothing has to be remembered between reliefs. This is the one statement of the rule; anywhere else that needs it points here, and the glossary's `handle` entry gives how the indexed handle reads in a pane's `-n`. A director is the other case, a separate rule: its name is its own number, so the successor takes the next one, and the document names both ends (`director-22-to-23-handoff.md`; the naming rule lives in the `handoff` skill). The window's own name and index are untouched either way.
 

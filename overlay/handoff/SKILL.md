@@ -5,7 +5,7 @@ argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save it to `.claude/handoffs/` in the current workspace, creating that folder if it is missing. Keep handoffs committed in the repo's history.
+Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save it to `.claude/handoffs/` in the current workspace. Create the folder if needed, and commit the handoff in the repo.
 
 **Name the file for both ends:** `<writer>-to-<reader>-handoff.md`, numbering every end that has a
 number. For example, `matt-flow-12-to-13-handoff.md`, `wayfinder-readability-07-to-matt-flow-10-handoff.md`.

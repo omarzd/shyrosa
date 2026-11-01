@@ -1,0 +1,185 @@
+/* Shared stylesheet for every lesson and reference page. Dark on screen, light in print. Tufte-leaning: one text column,
+   notes in the right margin on wide screens, inline below the paragraph on narrow ones. */
+
+:root {
+  color-scheme: dark;
+  --ink: #e6e1d3;
+  --muted: #9b968a;
+  --paper: #1b1a17;
+  --surface: #23221e;
+  --rule: #3b3934;
+  --accent: #e3925f;
+  --right: #74c184;
+  --right-bg: #1e3123;
+  --wrong: #e58080;
+  --wrong-bg: #3a2323;
+  --code-bg: #262420;
+  --serif: "Iowan Old Style", Charter, "Palatino Linotype", Palatino, Georgia, serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+  max-width: 62rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.55;
+}
+
+main, article { max-width: 38rem; position: relative; }
+
+header.lesson { margin-bottom: 2.5rem; }
+header.lesson .kicker {
+  font-variant: small-caps; letter-spacing: 0.06em; color: var(--muted); margin: 0;
+}
+h1 { font-weight: 400; font-size: 2.1rem; line-height: 1.15; margin: 0.2rem 0 0.6rem; }
+h2 { font-weight: 400; font-style: italic; font-size: 1.4rem; margin: 2.6rem 0 0.6rem; }
+h3 { font-weight: 600; font-size: 1rem; margin: 1.8rem 0 0.4rem; }
+.subtitle { font-style: italic; color: var(--muted); font-size: 1.15rem; margin: 0; }
+
+p, li { hyphens: auto; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+code, pre, .tree { font-family: var(--mono); font-size: 0.82rem; }
+code { background: var(--code-bg); padding: 0.05rem 0.25rem; border-radius: 2px; }
+pre, .tree {
+  background: var(--code-bg); padding: 0.9rem 1rem; overflow-x: auto;
+  line-height: 1.45; border-left: 3px solid var(--rule); white-space: pre;
+}
+pre code { background: none; padding: 0; }
+.tree .ws { color: var(--muted); }
+.tree .hl { color: var(--accent); font-weight: 600; }
+
+/* Margin notes. Put <span class="note">…</span> right after the sentence it supports. */
+.note {
+  display: block; float: right; clear: right;
+  width: 17rem; margin-right: -19.5rem; margin-top: 0.15rem;
+  font-size: 0.8rem; line-height: 1.4; color: var(--muted);
+}
+@media (max-width: 62rem) {
+  .note {
+    float: none; width: auto; margin: 0.4rem 0 0.8rem 1rem;
+    padding-left: 0.6rem; border-left: 2px solid var(--rule);
+  }
+}
+
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; border-bottom: 2px solid var(--ink); }
+
+/* The one sentence a lesson adds to his story. */
+.beat {
+  margin: 2rem 0; padding: 1rem 1.2rem; border-top: 2px solid var(--accent);
+  border-bottom: 1px solid var(--rule); font-size: 1.08rem;
+}
+.beat::before {
+  content: "Your story, this beat"; display: block; font-variant: small-caps;
+  letter-spacing: 0.06em; color: var(--accent); font-size: 0.85rem; margin-bottom: 0.3rem;
+}
+
+.callout { margin: 1.5rem 0; padding: 0.8rem 1rem; background: var(--code-bg); }
+
+/* Practice components, driven by practice.js. */
+.quiz, .recall { margin: 1.6rem 0; padding: 1rem 1.1rem; border: 1px solid var(--rule); }
+.quiz .q, .recall .q { margin-top: 0; font-weight: 600; }
+.quiz ol { list-style: none; padding: 0; margin: 0.6rem 0 0; }
+.quiz li button {
+  display: block; width: 100%; text-align: left; margin: 0.35rem 0; padding: 0.5rem 0.7rem;
+  font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--rule); cursor: pointer;
+}
+.quiz li button:hover:not(:disabled) { border-color: var(--ink); }
+.quiz li button.right { border-color: var(--right); background: var(--right-bg); }
+.quiz li button.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+.quiz li button:disabled { cursor: default; }
+.quiz .why, .recall .model { display: none; margin-top: 0.8rem; font-size: 0.92rem; }
+.quiz.answered .why, .recall.revealed .model { display: block; }
+.recall textarea {
+  width: 100%; min-height: 6rem; font: inherit; padding: 0.6rem;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+}
+.recall button, .score button {
+  font: inherit; margin-top: 0.6rem; padding: 0.35rem 0.9rem; cursor: pointer;
+  background: var(--ink); color: var(--paper); border: none;
+}
+.recall .checklist label { display: block; margin: 0.25rem 0; }
+.score { font-style: italic; color: var(--muted); }
+
+.ask {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+  font-size: 0.92rem; color: var(--muted);
+}
+nav.trail { font-size: 0.9rem; margin-top: 1rem; }
+
+@media print {
+  :root {
+    color-scheme: light;
+    --ink: #1d1d1b; --muted: #6b6860; --paper: #fff; --surface: #fff; --rule: #d9d5c7;
+    --accent: #8a3b12; --code-bg: #f3f1e6;
+  }
+  body { background: #fff; padding: 0; max-width: none; }
+  .note { float: none; width: auto; margin: 0.3rem 0 0.6rem 1rem; }
+  .quiz li button { border: none; padding: 0.1rem 0; }
+  .recall textarea, .recall button, .score button { display: none; }
+  .quiz .why, .recall .model { display: block; }
+  a { color: inherit; }
+}
+
+/* Board additions. The lesson stylesheet above is copied unchanged from
+   comma-tooling/teach/assets/style.css (manager's choice, shyrosa#143). */
+@media screen {
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --ink: #1d1d1b;
+    --muted: #6b6860;
+    --paper: #fff;
+    --surface: #fff;
+    --rule: #d9d5c7;
+    --accent: #8a3b12;
+    --right: #276738;
+    --right-bg: #e7f3e9;
+    --wrong: #a02e2e;
+    --wrong-bg: #faeaea;
+    --code-bg: #f3f1e6;
+  }
+}
+
+main { overflow-wrap: anywhere; }
+li + li { margin-top: 0.4rem; }
+.hold {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+#theme-toggle {
+  margin-bottom: 1.5rem;
+  padding: 0.4rem 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  cursor: pointer;
+}
+#theme-toggle[aria-pressed="true"] { border-color: var(--accent); }
+#theme-toggle:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media print {
+  :root {
+    --right: #276738;
+    --right-bg: #e7f3e9;
+    --wrong: #a02e2e;
+    --wrong-bg: #faeaea;
+  }
+  #theme-toggle { display: none; }
+}

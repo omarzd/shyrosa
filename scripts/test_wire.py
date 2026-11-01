@@ -204,6 +204,8 @@ class ScratchRepo(unittest.TestCase):
         os.makedirs(os.path.join(self.repo, "fleet", "codex"))
         with open(os.path.join(self.repo, "fleet", "codex", "AGENTS.md"), "w") as f:
             f.write("synthetic fleet instructions\n")
+        with open(os.path.join(self.repo, "fleet", "codex", "hooks.json"), "w") as f:
+            f.write('{"hooks": {}}\n')
         for top, names in (("overlay", self.OVERLAYS), ("upstream", self.UPSTREAM)):
             for name in names:
                 os.makedirs(os.path.join(self.repo, top, name))
@@ -251,11 +253,59 @@ class ScratchRepo(unittest.TestCase):
             self.assertTrue(os.path.isfile(agents))
 
 
+class PreferencesNotice(ScratchRepo):
+    NOTICE = ("No preferences are set; agents will use what this machine has. "
+              "Optional setup wizard: python3 scripts/setup-preferences.py")
+
+    def test_no_user_file_prints_the_notice_once_without_changing_the_repo(self):
+        before = snapshot(self.repo)
+        r = self.run_wire()
+        self.assertEqual(r.stdout.splitlines().count(self.NOTICE), 1)
+        self.assertEqual(r.stderr, "")
+        self.assertEqual(snapshot(self.repo), before)
+
+    def test_a_machine_file_does_not_suppress_the_notice_without_a_user_file(self):
+        path = os.path.join(self.repo, "fleet", "preferences", "machines", "linux.json")
+        os.makedirs(os.path.dirname(path))
+        with open(path, "w") as f:
+            f.write('{"claude": {"python_install": "uv"}}\n')
+        before = snapshot(self.repo)
+        r = self.run_wire()
+        self.assertEqual(r.stdout.splitlines().count(self.NOTICE), 1)
+        self.assertEqual(snapshot(self.repo), before)
+
+    def test_a_user_file_suppresses_the_notice_even_when_empty(self):
+        path = os.path.join(self.repo, "fleet", "preferences", "user.json")
+        os.makedirs(os.path.dirname(path))
+        for data in ('{"claude": {"python_install": "uv"}}\n', '{}\n', ''):
+            with self.subTest(data=data):
+                with open(path, "w") as f:
+                    f.write(data)
+                before = snapshot(self.repo)
+                r = self.run_wire()
+                self.assertNotIn("No preferences are set", r.stdout + r.stderr)
+                self.assertNotIn("setup-preferences.py", r.stdout + r.stderr)
+                self.assertEqual(snapshot(self.repo), before)
+
+
 class Codex(ScratchRepo):
     def codex_path(self, rel):
         path = os.path.join(self.home, ".codex", rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         return path
+
+    def test_hooks_link_preserves_real_file_and_is_idempotent(self):
+        hooks = self.codex_path("hooks.json")
+        with open(hooks, "w") as f:
+            f.write('{"local": "synthetic"}\n')
+        self.wire()
+        self.assertTrue(os.path.islink(hooks))
+        self.assertEqual(os.readlink(hooks), os.path.join(self.repo, "fleet", "codex", "hooks.json"))
+        with open(hooks + ASIDE) as f:
+            self.assertEqual(f.read(), '{"local": "synthetic"}\n')
+        before = snapshot(self.home)
+        self.wire()
+        self.assertEqual(snapshot(self.home), before)
 
     def test_links_agents_and_every_successful_claude_skill(self):
         self.wire()
@@ -310,7 +360,7 @@ class Codex(ScratchRepo):
             for path, entry in before.items():
                 self.assertEqual(after[path], entry)
             self.assertTrue(os.path.isdir(self.codex_path("skills/ours") + ASIDE))
-            self.assertIn("1 codex links, 3 skipped", r.stdout.splitlines()[-1])
+            self.assertIn("2 codex links, 3 skipped", r.stdout.splitlines()[-1])
             self.assertEqual(r.stderr.count("SKIP"), 3)
 
     def test_stale_owned_links_removed_and_foreign_links_and_backups_preserved(self):
@@ -345,7 +395,7 @@ class Codex(ScratchRepo):
         last = self.wire().splitlines()[-1]
         self.assertFalse(os.path.lexists(self.codex_path("skills/ours")))
         self.assertEqual(os.readlink(self.codex_path("skills/tdd")), "/foreign/tdd")
-        self.assertIn("2 codex links, 0 skipped, 1 stale codex links removed", last)
+        self.assertIn("3 codex links, 0 skipped, 1 stale codex links removed", last)
 
     def test_stale_ownership_uses_resolved_paths_including_dangling_links(self):
         owned = self.codex_path("skills/relative-owned")
@@ -386,7 +436,7 @@ class Codex(ScratchRepo):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.isfile(self.codex_path("AGENTS.md")))
         self.assertEqual(os.listdir(self.codex_path("skills/")), [])
-        self.assertIn("1 codex links, 0 skipped, 1 stale codex links removed", r.stdout)
+        self.assertIn("2 codex links, 0 skipped, 1 stale codex links removed", r.stdout)
 
 
 class Skills(ScratchRepo):
@@ -553,11 +603,14 @@ class Skills(ScratchRepo):
             f"link  statusline-context.py -> {self.repo}/fleet/statusline-context.py\n"
             f"link  output-styles/unslop.md -> {self.repo}/fleet/unslop.md\n"
             f"link  ~/.codex/AGENTS.md -> {self.repo}/fleet/codex/AGENTS.md\n"
+            f"link  ~/.codex/hooks.json -> {self.repo}/fleet/codex/hooks.json\n"
             f"link  ~/.codex/skills/ours -> {self.repo}/overlay/ours\n"
             f"link  ~/.codex/skills/shared -> {self.repo}/overlay/shared\n"
             f"link  ~/.codex/skills/tdd -> {self.repo}/upstream/tdd\n"
+            "No preferences are set; agents will use what this machine has. "
+            "Optional setup wizard: python3 scripts/setup-preferences.py\n"
             f"done: 3 skills wired, 0 skipped, 0 stale clone links removed, into {self.skills}; "
-            "2 fleet files linked, 0 skipped; 4 codex links, 0 skipped, 0 stale codex links removed; "
+            "2 fleet files linked, 0 skipped; 5 codex links, 0 skipped, 0 stale codex links removed; "
             "settings.json not linked, first link needs --link-settings\n"
         ))
 

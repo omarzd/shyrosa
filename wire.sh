@@ -2,7 +2,7 @@
 #
 # wire.sh — (re)link every skill into ~/.claude/skills so Claude Code loads it,
 # and link the fleet settings, status-line script and Unslop style into ~/.claude.
-# Codex gets fleet/codex/AGENTS.md and the same successfully linked skills.
+# Codex gets fleet/codex/{AGENTS.md,hooks.json} and the same successfully linked skills.
 #
 # Skills come from two folders. overlay/* are ours; upstream/* is the vendored copy of
 # Matt's skills. An overlay wins over a Matt skill of the same name, and a Matt skill
@@ -186,6 +186,7 @@ link_codex() {  # <path under ~/.codex> <absolute source>
   codex_linked=$((codex_linked + 1))
 }
 link_codex AGENTS.md "$repo/fleet/codex/AGENTS.md"
+link_codex hooks.json "$repo/fleet/codex/hooks.json"
 for name in ${linked_skills[@]+"${linked_skills[@]}"}; do
   link_codex "skills/$name" "$(readlink "$dest/$name")"
 done
@@ -210,5 +211,9 @@ for target in "$codex_dest"/*; do
   echo "unlink ~/.codex/skills/$name — stale link into this repo"
   codex_removed=$((codex_removed + 1))
 done
+
+if [ ! -f "$repo/fleet/preferences/user.json" ]; then
+  echo "No preferences are set; agents will use what this machine has. Optional setup wizard: python3 scripts/setup-preferences.py"
+fi
 
 echo "done: ${linked} skills wired, ${skipped} skipped, ${removed} stale clone links removed, into ${dest}; ${fleet_linked} fleet files linked, ${fleet_skipped} skipped; ${codex_linked} codex links, ${codex_skipped} skipped, ${codex_removed} stale codex links removed${settings_note}"

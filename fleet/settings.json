@@ -1,6 +1,8 @@
 {
   "cleanupPeriodDays": 36500,
-  "model": "opus",
+  "env": {
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"
+  },
   "permissions": {
     "deny": [
       "NotebookEdit",
@@ -19,6 +21,16 @@
   "disableClaudeAiConnectors": true,
   "disableBundledSkills": true,
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.shyrosa/scripts/preferences.py --brief"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
@@ -30,6 +42,15 @@
           {
             "type": "command",
             "command": "python3 ~/.shyrosa/scripts/check-handoff-write.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.shyrosa/scripts/check-preferences.py"
           }
         ]
       }
@@ -47,6 +68,7 @@
     "cc-plugin-you-should-know@builtin": false
   },
   "outputStyle": "Unslop",
+  "feedbackDrafts": "off",
   "effortLevel": "xhigh",
   "modelSettings": {
     "claude-opus-5": {
@@ -61,16 +83,12 @@
     "enabled": true,
     "mode": "hold"
   },
+  "autoMemoryEnabled": false,
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "autoCompactEnabled": false,
   "idleCompaction": false,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true,
-  "autoMemoryEnabled": false,
-  "env": {
-    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"
-  },
-  "feedbackDrafts": "off"
+  "voiceEnabled": true
 }

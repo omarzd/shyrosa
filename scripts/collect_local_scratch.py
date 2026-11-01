@@ -163,9 +163,10 @@ def build_lines(root, tickets, grills, studio, building, stamp):
         L.append(("row", f"STUDIO-QUEUE §{num} — {t}", ".scratch/STUDIO-QUEUE.md",
                   entry_href(studio_page, num, t)))
 
-    L.append(("h2", "THE DIRECTOR'S DESK — counted so you can skip it", None, None))
+    L.append(("h2", "WAITING ON YOU", None, None))
     L.append(("row", f"{len(tickets.get('ready-for-human', []))} tickets at ready-for-human", ".scratch",
               "file://" + os.path.join(root, ".scratch")))
+    L.append(("h2", "MOVING WITHOUT YOU", None, None))
     L.append(("row", f"{len(tickets.get('needs-info', []))} tickets at needs-info", ".scratch",
               "file://" + os.path.join(root, ".scratch")))
     done = sum(len(v) for k, v in tickets.items() if k in ("merged", "done", "promoted", "resolved"))

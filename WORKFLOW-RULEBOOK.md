@@ -235,13 +235,13 @@ Words are defined once, in [`WORKFLOW-VOCAB.md`](WORKFLOW-VOCAB.md). This file u
   drains in file order without asking per round. He speaks to **stop** the conveyor, not to start
   it. **(D)**
 - **Merging the last ticket that names a spec closes the spec.** At each ticket's merge, read its
-  `## Parent`; when no open issue still references that spec in its `## Parent` section, close it
-  as discharged, commenting the tickets that discharged it. For GitHub, run
+  `## Parent`; close the spec as discharged when no open issue references it in its `## Parent`
+  section. Comment with the tickets that discharged it. For GitHub, run
   `python3 ~/.shyrosa/scripts/spec-parent-query.py --repo <owner/repo> --spec <number>` against
   the tracker in `docs/agents/issue-tracker.md`, adding `--alias <project>` when Parent references
-  use a project shorthand different from the tracker name. A successful `[]` means none remain;
-  a failed query leaves discharge undecided. A query decides, never memory of which round this
-  is. **(D)**
+  use a project shorthand different from the tracker name. Only a successful `[]` means none remain;
+  a failed query leaves discharge undecided. Decide from the query result each time,
+  rather than recalling which round this is. **(D)**
 - **Still his alone:** pushes of substance, and every step touching the live database. Dry-run →
   he reads the report → he says apply. **(all)**
 - **"I agree with the plan" is not a merge word.** Outside the auto-merge default, wait for an
@@ -300,17 +300,37 @@ Words are defined once, in [`WORKFLOW-VOCAB.md`](WORKFLOW-VOCAB.md). This file u
 - **Outside the codex line below, workers run Claude Code on a model the ladder names.** A launch
   that would open another harness, model or provider is a question for the manager before the
   dispatch, since a worker on another provider sends the project's private files there. **(D)**
-- **Until the weekly reset on Thursday 2026-10-29, codex runs all the agent work a director hands
-  out, in every project:** workers, gate reviewers and the director's own sub-agents. After that
-  date it runs only in the projects listed under *Projects named for codex* in
-  `docs/agents/fleet-references.md`, and every other project goes back to Claude workers on the
-  ladder. The launch is `codex -m gpt-6.1-sol -c model_reasoning_effort="medium"`, with
-  `-C <worktree>` since codex has no `EnterWorktree`; a sub-agent or gate runs as `codex exec`.
-  Codex invokes a skill as `$name` where these docs write `/name`. A director's or the foreman's own
-  harness is the manager's to change, by hand; a relief launches its successor on the harness the
-  relieved agent ran. **(all)**
+- **A director runs Claude Code in every project; codex runs only the agent work a director hands
+  out.** In a project listed under *Projects named for codex* in `docs/agents/fleet-references.md`,
+  workers, gate reviewers and the director's own sub-agents run on codex, on the latest codex
+  model at high effort; that file holds the model id. Every other project keeps Claude workers on
+  the ladder. The launch is `codex -m <id> -c model_reasoning_effort="high"`, with `-C <worktree>`
+  since codex has no `EnterWorktree`; a sub-agent or gate runs as `codex exec`. Codex invokes a
+  skill as `$name` where these docs write `/name`. The foreman's harness is the manager's to
+  change, by hand; a relief launches its successor on the harness the relieved agent ran.
+  **(all)**
+- **Every message typed into another agent's session opens with who sent it:** `From <name>,
+  <role> (<pane address>):`, whether an agent or a script types it, launch prompts and relief
+  messages included. A script with no pane of its own may leave out the address. A message that
+  starts with a command carries the signature straight after the command name, inside its
+  arguments (`/handoff From foreman-5, the foreman (shyrosa:foreman): <purpose>`), so the command
+  still runs directly; a bare harness command such as `/exit` goes unsigned. An unsigned message
+  is the manager's, and he never signs. A signed message stays its sender's however it arrives,
+  inside his own turn included. `tmux-orchestrator`'s `send` rejects unsigned text sent to an agent
+  pane. `send-raw` stages an unsigned command for the manager to submit; it checks every other
+  message. Both commands allow text sent to a shell. **(all)**
+- **A Codex worker stops and asks its director the moment a question comes up.** It decides
+  alone only what stays inside its own change and that neither the ticket nor the spec settles,
+  such as a name or how its own code is laid out. A path, a file format or an interface another
+  ticket shares, anything a user would see, or anything that conflicts with the brief makes it
+  stop at once, with the question as its last message. Stopping is cheap, because the director's
+  waiter notices a still pane within minutes. Every decision it made alone goes in its report
+  under Assumptions, and the gate checks each one against the spec. Codex's ask-the-user tool
+  shows a question only in the worker's pane and has no off switch, so Codex's `AGENTS.md` and
+  the launch prompt carry this rule, and the waiter also fires on a pending question. A director
+  cutting tickets that run side by side names every contract they share in both. **(all)**
 - **Model and effort are set on the launch line** (`--model`, `--effort`); never send `/model` or
-  `/effort` into a running session. Workers run `medium`. A ticket arrives already specified, so
+  `/effort` into a running session. Claude workers run `medium`. A ticket arrives already specified, so
   the reasoning dial is spent on a settled question. A director runs `ultracode` (a matt-flow
   director needs only `high`), which is what keeps it above its workers when both are on the
   same model. **(all)**
@@ -508,12 +528,15 @@ Words are defined once, in [`WORKFLOW-VOCAB.md`](WORKFLOW-VOCAB.md). This file u
 
 ## Writing rules and docs
 
-- **A PreToolUse guard blocks a bare prose edit, machine-wide.** Edit or Write on agent-read
+- **A PreToolUse guard blocks a bare prose edit, machine-wide.** Claude Code's Edit or Write,
+  and Codex's `apply_patch`, on agent-read
   prose, meaning any skill's `.md`, `CLAUDE.md`, `AGENTS.md`, `docs/agents/*.md`, this rulebook and
   the vocab, passes only when `/writing-for-agents` was invoked in the **current turn**; otherwise
   the guard bounces the call with the instruction to invoke and retry
-  (`~/.shyrosa/scripts/check-writing-for-agents.py`, hooked in `~/.claude/settings.json`). Its
-  sibling guards `.claude/handoffs/` the same way: a handoff file writes only under a
+  (`~/.shyrosa/scripts/check-writing-for-agents.py`, hooked in `~/.claude/settings.json` and
+  `~/.codex/hooks.json`). Codex's hook is live after the manager approves it in `/hooks` on
+  each machine; invoke the skill there as `$writing-for-agents`. Claude Code's
+  sibling guard covers `.claude/handoffs/` the same way: a handoff file writes only under a
   current-turn `/handoff` invocation (`check-handoff-write.py`, same hook). **(all)**
 - **A fleet file's tilde address (`~/.shyrosa/...`) is the reader's pointer, not where a bound
   worker writes.** It resolves to the shared checkout, so a worktree-isolated write there bounces

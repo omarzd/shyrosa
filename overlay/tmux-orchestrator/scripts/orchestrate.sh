@@ -105,11 +105,23 @@ resolve_target() {
 
 # A pager can react to Enter just like a shell or agent. Check who will receive
 # the keystrokes before typing anything; pane movement alone cannot prove that.
+# Check supplied text under the rulebook's message signing and staging rule.
 require_input_receiver() {
   local target="$1" command
   command=$(tmux display-message -p -t "$target" '#{pane_current_command}')
   case "$command" in
-    fish|bash|zsh|sh|dash|ksh|tcsh|csh|claude|claude.exe|codex|pi) return 0 ;;
+    fish|bash|zsh|sh|dash|ksh|tcsh|csh) return 0 ;;
+    claude|claude.exe|codex|pi)
+      [ "$#" -eq 1 ] && return 0  # enter has no message to check
+      [[ "$2" == 'From '* ]] && return 0
+      local staged_command='^[/$][^[:space:]]+([[:blank:]]|$)'
+      [[ "${3:-}" == send-raw && "$2" =~ $staged_command ]] && return 0
+      local signed_command='^[/$][^[:space:]]+[[:blank:]]+From '
+      [[ "$2" =~ $signed_command ]] && return 0
+      local bare_command='^[/$][^[:space:]]+$'
+      [[ "$2" =~ $bare_command ]] && return 0
+      die "refusing unsigned text to '$target': open with From <name>, <role> (<pane address>):"
+      ;;
     *) die "refusing input to '$target': foreground process '$command' is neither a shell nor an agent CLI" ;;
   esac
 }
@@ -118,7 +130,7 @@ cmd_send() {
   local target="${1:?target required}"; shift
   local text="$*"
   [ -n "$text" ] || die "no text to send"
-  require_input_receiver "$target"
+  require_input_receiver "$target" "$text"
   tmux send-keys -t "$target" -l -- "$text"
   # TUI prompt editors treat a fast burst as a paste; an Enter riding the same
   # burst gets swallowed as a pasted newline instead of submitting. Pause first.
@@ -144,7 +156,7 @@ cmd_send() {
 cmd_send_raw() {
   local target="${1:?target required}"; shift
   local text="$*"
-  require_input_receiver "$target"
+  require_input_receiver "$target" "$text" send-raw
   tmux send-keys -t "$target" -l -- "$text"
   echo "sent (no enter) to $target: $text"
 }
