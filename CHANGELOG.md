@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.2, 2026-11-02
+
+- The README is rewritten for readers who don't code: it speaks to you, explains each term the
+  first time it appears, and says what you need before you start.
+- The writing style gains four rules: one new piece of information per clause, no "so" clause
+  tacked onto a sentence, "and" only between things that belong together, and no wording that
+  reads two ways.
+
 ## v0.1.1, 2026-11-01
 
 - Codex workers get the same prose guard as Claude Code: a Codex hook blocks an edit to a skill,

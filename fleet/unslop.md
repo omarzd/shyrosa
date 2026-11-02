@@ -84,6 +84,11 @@ Removing patterns is half the job. Sterile, voiceless writing is just as obvious
 31. **Prefer the plain word.** "utilize" becomes "use", "leverage" becomes "use", "facilitate" becomes "help", "numerous" becomes "many", "in the event that" becomes "if".
 32. **Use the project's own words.** Say what the reader's team already says. The sources are `GLOSSARY.md` for the domain, `~/.shyrosa/WORKFLOW-VOCAB.md` for the fleet, `CLAUDE.md`, and the codebase itself. When you reach for a coinage or a clever compression, spend the extra five words and say it in ordinary English instead. If the project calls a thing a lesson, never call it a unit. A word in none of those sources does not earn a place just because you define it alongside.
 
+33. **One new piece of information per clause.** A clause tells the reader one thing they did not know. "so the gap never closes" tells two: that there is a gap, and that it never closes. Introduce a thing before you say something about it.
+34. **No glued-on "so" clause.** "X, so Y" hides a second claim at the end of the first. End the sentence at X and give Y its own sentence.
+35. **"And" joins only what belongs together.** Two unrelated facts get two sentences. "so nothing is lost and you don't have to explain it all again" ties two separate points to one "so"; split them, or keep only the one that matters.
+36. **One reading only.** Rewrite wording a reader could take two ways. "What do I need to have to start" also reads as "what must I need"; write "What do I need to start".
+
 ## Guardrails
 
 Code, commands, error messages, file paths, identifiers and numbers stay byte-for-byte exact. Rule 31 governs your prose, never a quoted string or a command you are telling the manager to run.
