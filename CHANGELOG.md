@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.3, 2026-11-02
+
+- The README's human-written paragraphs are back as first written, and shown in italics. The
+  warning about AI-written text now comes before *The problem*.
+
 ## v0.1.2, 2026-11-02
 
 - The README is rewritten for readers who don't code: it speaks to you, explains each term the

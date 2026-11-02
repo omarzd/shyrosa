@@ -3,29 +3,32 @@
 ShyRosa is an agentic AI workflow with its own checks and rules. Use it to analyze any problem, design the solution, and implement it through multiple agents. It is built on
 [Matt Pocock's skills](https://www.aihero.dev/), with many changes on top.
 
+> [!WARNING]
+> As someone who really cares about quality writing and a skilled writer myself, I gave ShyRosa the power to control its writing as much as I could. This README is a result of my effort. It still sucks, but it is better than your average slop.
+>
+> **Disclaimer**: This is the last human-written line. From here on, it's AI slop, except the parts in italics. Well in fact, this entire project has been built using ShyRosa itself as the framework with Claude Fable 5 and 5.1 for 35% of the content and Opus 5.5 for 40% of the content.
+
 ## The problem
 
-Claude Code and Codex are the best-known coding harnesses. A harness hosts one or more AI
-models and gives you a way to talk to the coding agent. They work well for *small* projects
+Claude Code and Codex are the best-known coding harnesses. A harness hosts one or more models
+(LLMs) and gives you a way to talk to the coding agent. They work well for *small* projects
 and horribly for large ones. Every few months a new release handles projects that the last one
 could not. But people immediately try something bigger. The bar for what counts as *small*
 keeps rising, yet we will keep calling it small. 
 
-The trouble starts when the agent disobeys a direct instruction, makes something up, or
-assumes instead of asking. Every agentic AI workflow, ShyRosa included, tries to stop that
-from happening.
+*The problem is when these coding agents perform horribly. They disobey direct orders. They make
+things up. They don't inquire enough, but rather assume things. Every agentic AI workflow out
+there, including ShyRosa, aims to solve this problem.*
 
 ## What do I need to start using ShyRosa?
 
-The author recommends Claude Code, as does Matt Pocock. It also works with Codex. The author
-has tested having the director (defined below) run as a Claude or GPT agent while workers run
-on a different harness, Oh-My-Pi with OpenRouter. It worked but was too costly and the results
-were not good enough. Other harness setups should work in theory but have not been tested.
+*I strongly recommend Claude Code, as does Matt Pocock. But you can also use it with Codex since
+I've tested it on Codex. I've also tested having the director (defined below) be a Claude or GPT
+agent while workers spawned by the director be on a different harness, namely Oh-My-Pi with
+OpenRouter. It worked but it was too costly and unsatisfactory. I haven't tested it on other
+harness setups, though it should theoretically work.*
 
-This README assumes you are using Claude Code.
-
-> [!WARNING]
-> **Disclaimer**: This is the last human-written line. From here on, it's AI slop. Well in fact, this entire project has been built using ShyRosa itself as the framework with Claude Fable 5 and 5.1 for 35% of the content and Opus 5.5 for 40% of the content.
+*This README assumes you're using Claude Code.*
 
 Besides Claude Code, you need four things on your computer:
 
@@ -41,10 +44,10 @@ Besides Claude Code, you need four things on your computer:
 - **Python 3.** ShyRosa's checks are small Python programs. On a Mac, the system asks you to
   install Python the first time you run `python3`.
 
-What the author uses, if you want a starting point:
+What I use, if you want a starting point:
 
 - **macOS:** [WezTerm](https://wezterm.org) with tmux, set up from
-  [Tom Delalande's setup](https://github.com/tom-delalande/setup). The author's own version is
+  [Tom Delalande's setup](https://github.com/tom-delalande/setup). My own version is
   more customized and will be shared later.
 - **Windows:** [wmux](https://github.com/openwong2kim/wmux), one app that is both the terminal and
   the tmux-style windows. It also adds its own tools to Claude Code when you install it.
